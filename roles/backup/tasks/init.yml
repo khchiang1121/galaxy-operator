@@ -24,17 +24,18 @@
   block:
     - name: Set error message
       set_fact:
-        error_msg: "{{ backup_pvc }} does not exist, please create this pvc first."
+        error_msg: "{{ backup_pvc }} does not exist, please create this pvc first or ensure create_backup_pvc is set to true (default) for automatic backup_pvc creation."
 
     - name: Handle error
       import_tasks: error_handling.yml
 
     - name: Fail early if pvc is defined but does not exist
       fail:
-        msg: "{{ backup_pvc }} does not exist, please create this pvc first."
+        msg: "{{ backup_pvc }} does not exist, please create this pvc first or ensure create_backup_pvc is set to true (default) for automatic backup_pvc creation."
   when:
     - backup_pvc != ''
     - provided_pvc.resources | length == 0
+    - not create_backup_pvc | bool
 
 - name: Set default pvc name
   set_fact:
@@ -43,7 +44,7 @@
 # by default, it will re-use the old pvc if already created (unless pvc is provided)
 - name: Set PVC to use for backup
   set_fact:
-    backup_claim: "{{ backup_pvc | default(_default_backup_pvc, true) }}"
+    backup_pvc: "{{ backup_pvc | default(_default_backup_pvc, true) }}"
 
 - name: Create persistent volume claim for backup
   k8s:
@@ -52,7 +53,7 @@
   with_items:
     - backup
   when:
-    - backup_pvc == '' or backup_pvc is not defined
+    - (backup_pvc == '' or backup_pvc is not defined) or (create_backup_pvc | bool)
 
 - name: Remove ownerReferences from backup-claim pvc to avoid garbage collection
   k8s:
@@ -60,7 +61,7 @@
       apiVersion: v1
       kind: PersistentVolumeClaim
       metadata:
-        name: '{{ backup_claim }}'
+        name: '{{ backup_pvc }}'
         namespace: '{{ backup_pvc_namespace }}'
         ownerReferences: null
 
@@ -172,15 +173,20 @@
     - _storage_claim['resources'][0]['spec']['accessModes'][0] is defined
     - _storage_claim['resources'][0]['spec']['accessModes'][0] | length
 
+- name: Set default postgres image
+  set_fact:
+    _default_postgres_image: "{{ _postgres_image }}:{{ _postgres_image_version }}"
+
 - name: Set user provided postgres image
   set_fact:
-    _custom_postgres_image: "{{ postgres_image }}"
+    _custom_postgres_image: "{{ postgres_image }}:{{ postgres_image_version }}"
   when:
-    - postgres_image is defined and postgres_image != ''
+    - postgres_image | default([]) | length
+    - postgres_image_version is defined and postgres_image_version != ''
 
 - name: Set Postgres image URL
   set_fact:
-    _postgres_image: "{{ _custom_postgres_image | default(lookup('env', 'RELATED_IMAGE_GALAXY_POSTGRES')) | default(_postgres_image, true) }}"
+    _postgres_image: "{{ _custom_postgres_image | default(lookup('env', 'RELATED_IMAGE_GALAXY_POSTGRES')) | default(_default_postgres_image, true) }}"
 
 - name: Determine the timestamp for the backup once for all nodes
   set_fact:

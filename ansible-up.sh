@@ -11,8 +11,16 @@
 
 # -- Variables
 TAG=${TAG:-dev}
+ENGINE=${ENGINE:-podman}
+
+DEV_CR=${DEV_CR:-dev/cr-examples/galaxy.cr.yml}
+PULL_SECRET_FILE=${PULL_SECRET_FILE:-hacking/pull-secret.yml}
 
 IMG=${IMG:-"quay.io/$QUAY_USER/galaxy-operator:$TAG"}
+KUBE_APPLY="kubectl apply -n $NAMESPACE -f"
+
+# Detect host architecture
+HOST_ARCH=$(uname -m)
 
 if [ -z "$QUAY_USER" ]; then
   echo "Error: QUAY_USER env variable is not set."
@@ -84,33 +92,43 @@ kubectl config set-context --current --namespace=$NAMESPACE
 kubectl delete deployment galaxy-operator-controller-manager
 
 # -- Create Pull Secret
-kubectl create secret generic redhat-operators-pull-secret --from-file=.dockerconfigjson=$HOME/.docker/config.json --type=kubernetes.io/dockerconfigjson
+if [ -f "$PULL_SECRET_FILE" ]; then
+    $KUBE_APPLY $PULL_SECRET_FILE
+else
+    kubectl create secret generic redhat-operators-pull-secret --from-file=.dockerconfigjson=$HOME/.docker/config.json --type=kubernetes.io/dockerconfigjson
+fi
 
 # -- Create Secrets for data migration if desired
-kubectl apply -f dev/admin-password-secret.yml
+$KUBE_APPLY dev/admin-password-secret.yml
 
 
 # -- Build & Push Operator Image
-make docker-build docker-push IMG=$IMG
+if [[ "$HOST_ARCH" == "aarch64" || "$HOST_ARCH" == "arm64" ]] && [ "$ENGINE" = "podman" ]; then
+  echo "ARM architecture detected with podman, using podman-buildx for multiarch build"
+  make podman-buildx IMG=$IMG
+else
+  echo "Using standard docker build and push"
+  make docker-build docker-push IMG=$IMG
+fi
 
 # -- Deploy Pulp Operator
 echo "Make Deploy"
 make deploy IMG=$IMG NAMESPACE=$NAMESPACE
 
 # -- CI assets
-# kubectl apply -f .ci/assets/kubernetes/galaxy_sign.secret.yaml
-# kubectl apply -f .ci/assets/kubernetes/signing_scripts.configmap.yaml
-# kubectl apply -f .ci/assets/kubernetes/pulp-admin-password.secret.yaml
+# $KUBE_APPLY .ci/assets/kubernetes/galaxy_sign.secret.yaml
+# $KUBE_APPLY .ci/assets/kubernetes/signing_scripts.configmap.yaml
+# $KUBE_APPLY .ci/assets/kubernetes/pulp-admin-password.secret.yaml
 # sed -i '/file_storage_access_mode:/c\  file_storage_access_mode: ReadWriteOnce' config/samples/pulpproject_v1beta1_pulp_cr.galaxy.ci.yaml
-# kubectl create -f config/samples/pulpproject_v1beta1_pulp_cr.galaxy.ci.yaml # CI CR
+# $KUBE_APPLY config/samples/pulpproject_v1beta1_pulp_cr.galaxy.ci.yaml # CI CR
 
 
 # Signing Configurations
-kubectl apply -f .ci/assets/kubernetes/galaxy_sign.secret.yaml
-kubectl apply -f .ci/assets/kubernetes/signing_scripts.configmap.yaml
+$KUBE_APPLY .ci/assets/kubernetes/galaxy_sign.secret.yaml
+$KUBE_APPLY .ci/assets/kubernetes/signing_scripts.configmap.yaml
 
 echo "Create Galaxy Custom Resource Object"
-kubectl create -f dev/galaxy.cr.yml
+$KUBE_APPLY $DEV_CR
 
 
 

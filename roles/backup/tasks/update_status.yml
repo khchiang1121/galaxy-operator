@@ -34,7 +34,7 @@
     name: "{{ ansible_operator_meta.name }}"
     namespace: "{{ ansible_operator_meta.namespace }}"
     status:
-      backupClaim: "{{ backup_claim }}"
+      backupClaim: "{{ backup_pvc }}"
   when: backup_complete is defined
 
 # The backup PVC namespace in this status can be referenced when restoring
@@ -46,6 +46,16 @@
     namespace: "{{ ansible_operator_meta.namespace }}"
     status:
       backupNamespace: "{{ backup_pvc_namespace }}"
+  when: backup_complete is defined
+
+- name: Update backup PostgreSQL status
+  operator_sdk.util.k8s_status:
+    api_version: '{{ api_version }}'
+    kind: "{{ kind }}"
+    name: "{{ ansible_operator_meta.name }}"
+    namespace: "{{ ansible_operator_meta.namespace }}"
+    status:
+      backupPostgres: "{{ not postgres_skip_data | bool or postgres_type == 'managed' }}"
   when: backup_complete is defined
 
 # The backup  storage type in this status can be referenced when restoring

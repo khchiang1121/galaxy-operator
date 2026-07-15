@@ -8,9 +8,11 @@ Pipfile.lock
 # Ignore development and testing artifacts
 .vscode
 bin
+hacking/*
 test*
 testing/*
 testbin/*
+hacking/
 
 # Ignore mkdocs builds
 site

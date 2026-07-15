@@ -1,7 +1,8 @@
 ---
 supported_pg_version: 15
 deployment_type: "galaxy"
-_postgres_image: quay.io/sclorg/postgresql-15-c9s:latest
+_postgres_image: quay.io/sclorg/postgresql-15-c9s
+_postgres_image_version: latest
 
 custom_resource_key: '_galaxy_ansible_com_galaxyrestore'
 
@@ -11,8 +12,6 @@ deployment_api_version: v1beta1
 backup_api_version: 'v1beta1'
 backup_kind: 'GalaxyBackup'
 
-# If set to true, the restore process will delete the existing database and create a new one
-force_drop_db: false
 pg_drop_create: ''
 
 is_k8s: false

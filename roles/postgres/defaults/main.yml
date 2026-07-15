@@ -1,5 +1,6 @@
 ---
-_postgres_image: quay.io/sclorg/postgresql-15-c9s:latest
+_postgres_image: quay.io/sclorg/postgresql-15-c9s
+_postgres_image_version: latest
 
 postgres_storage_requirements:
   requests:
@@ -18,9 +19,6 @@ postgres_host_auth_method: 'scram-sha-256'
 #   kubernetes.io/os: linux
 postgres_selector: ''
 
-# Specify whether or not to keep the old PVC after PostgreSQL upgrades
-postgres_keep_pvc_after_upgrade: false
-
 # Add node tolerations for the Postgres pods.
 # Specify as literal block. E.g.:
 # postgres_tolerations: |
@@ -30,8 +28,11 @@ postgres_keep_pvc_after_upgrade: false
 #     effect: "NoSchedule"
 postgres_tolerations: ''
 
-# Define postgres configuration arguments to use
+# Define postgres configuration arguments to use (Deprecated)
 postgres_extra_args: ''
+#
+# Define postgresql.conf configurations
+postgres_extra_settings: []
 
 postgres_data_volume_init: false
 postgres_init_container_commands: |

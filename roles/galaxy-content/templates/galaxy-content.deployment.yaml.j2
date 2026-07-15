@@ -59,8 +59,14 @@ spec:
   ] %}
         checksum-secret-{{ secret }}: "{{ lookup('ansible.builtin.vars', secret, default='')["resources"][0]["data"] | default('') | sha1 }}"
 {% endfor %}
+{% if http_proxy or https_proxy or no_proxy %}
+        checksum-proxy-env-configmap: "{{ lookup('template', '../common/templates/proxy-env.configmap.yaml.j2') | sha1 }}"
+{% endif %}
     spec:
-{% if _node_affinity is defined %}
+{% if content_affinity is defined and content_affinity | length > 0 %}
+      affinity:
+        {{ content_affinity | to_nice_yaml | indent(width=8) }}
+{% elif _node_affinity is defined and _node_affinity | length > 0 %}
       affinity:
         nodeAffinity: {{ _node_affinity }}
 {% endif %}
@@ -164,7 +170,7 @@ spec:
             - -c
             - |
               mkdir -p /etc/pki/ca-trust/extracted/{java,pem,openssl,edk2}
-              update-ca-trust
+              update-ca-trust extract --output /etc/pki/ca-trust/extracted
 {% if combined_content.resource_requirements is defined %}
           resources: {{ combined_content.resource_requirements }}
 {% endif %}
@@ -225,12 +231,18 @@ spec:
 {% endif %}
             - name: GUNICORN_TIMEOUT
               value: "{{ gunicorn_timeout }}"
+            - name: GUNICORN_TIMEOUT_GRACE_PERIOD
+              value: "{{ gunicorn_timeout_grace_period }}"
             - name: GUNICORN_WORKERS
               value: "{{ gunicorn_content_workers }}"
 {% if signing_secret is defined %}
             - name: PULP_SIGNING_KEY_FINGERPRINT
               value: "{{ signing_key_fingerprint }}"
 {% endif %}
+          envFrom:
+            - configMapRef:
+                name: '{{ ansible_operator_meta.name }}-proxy-env'
+                optional: true
           ports:
             - protocol: TCP
               containerPort: 24816

@@ -30,3 +30,8 @@ restore_resource_requirements:
     memory: "32Mi"
 
 spec_overrides: {}
+
+force_drop_db: false
+
+# Skip PostgreSQL database restore
+postgres_skip_data: false

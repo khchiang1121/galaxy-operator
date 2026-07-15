@@ -8,6 +8,16 @@
     combined_worker: "{{ _worker | combine(worker, recursive=True) }}"
     combined_redis: "{{ _redis | combine(redis, recursive=True) }}"
 
+- name: Set proxy vars from CR spec
+  # TODO: Investigate why these fields require explicit raw_spec extraction while
+  # bundle_cacert_secret (also a top-level string in defaults/main.yml) works via
+  # the operator framework's normal spec-merge without this task. Possible causes:
+  # CRD not applied before first test run, or a framework quirk with newly-added fields.
+  ansible.builtin.set_fact:
+    http_proxy: "{{ raw_spec.http_proxy | default(http_proxy) }}"
+    https_proxy: "{{ raw_spec.https_proxy | default(https_proxy) }}"
+    no_proxy: "{{ raw_spec.no_proxy | default(no_proxy) }}"
+
 - name: Set apiVersion and kind variables
   ansible.builtin.set_fact:
     api_version: '{{ hostvars["localhost"]["inventory_file"].split("/")[4:6] | join("/")  }}'
@@ -59,16 +69,37 @@
       web_url: "https://{{ route_host }}"
   when: ingress_type | lower == 'route'
 
+- name: Look up details for this deployment
+  k8s_info:
+    api_version: "{{ api_version }}"
+    kind: "{{ kind }}"
+    name: "{{ ansible_operator_meta.name }}"
+    namespace: "{{ ansible_operator_meta.namespace }}"
+  register: this_galaxy
+
+- name: set annotations based on this_galaxy
+  set_fact:
+    this_annotations: "{{ this_galaxy['resources'][0]['metadata']['annotations'] | default({}) }}"
+
+- name: set client_request_timeout based on annotation
+  set_fact:
+    client_request_timeout: "{{ (this_annotations['aap.ansible.io/client-request-timeout'][:-1]) | int }}"
+    client_request_timeout_overidden: true
+  when:
+    - "'aap.ansible.io/client-request-timeout' in this_annotations"
+    - this_annotations['aap.ansible.io/client-request-timeout'] is match('^\\d+s$')
+
+- name: client_request_timeout has been changed
+  debug:
+    msg: "client_request_timeout's default 30s value has been overriden by the annotation 'aap.ansible.io/client-request-timeout' to {{ client_request_timeout }}s"
+  when: client_request_timeout_overidden | default(false)
+
 - name: Configure Postgres Configuration Secret
   include_tasks: postgres_configuration.yml
 
 - name: Idle {{ deployment_type }}
   ansible.builtin.include_tasks: idle_deployment.yml
   when: idle_deployment | bool
-
-- name: Check for existing {{ deployment_type }} deployment
-  ansible.builtin.include_tasks: check_existing.yml
-  when: gating_version | length
 
 - name: Set Bundle Certificate Authority
   include_tasks: set_bundle_cacert.yml
@@ -94,3 +125,9 @@
 
 - name: Set application images
   include_tasks: set_images.yml
+
+- name: Apply proxy environment ConfigMap
+  k8s:
+    apply: yes
+    definition: "{{ lookup('template', 'proxy-env.configmap.yaml.j2') }}"
+    state: "{{ 'present' if (http_proxy or https_proxy or no_proxy) else 'absent' }}"

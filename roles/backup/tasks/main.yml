@@ -3,14 +3,17 @@
 - name: Obtain custom resource information
   set_fact:
     custom_resource: "{{ hostvars[inventory_hostname][custom_resource_key] }}"
-    custom_resource_status: "{{ hostvars[inventory_hostname][custom_resource_key]['status'] }}"
+    custom_resource_status: "{{ hostvars[inventory_hostname][custom_resource_key]['status'] | default({}) }}"
 
 - block:
     - include_tasks: ../../common/tasks/check_k8s_or_openshift.yml
 
     - include_tasks: init.yml
 
+    - include_tasks: set_database_config.yml
+
     - include_tasks: postgres.yml
+      when: not postgres_skip_data | bool or postgres_type == 'managed'
 
     - include_tasks: custom_resource.yml
 

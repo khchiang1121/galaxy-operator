@@ -61,7 +61,19 @@ sudo -E kubectl logs -l app.kubernetes.io/name=nginx --tail=10000 || true
 echo ::endgroup::
 
 echo ::group::POSTGRES
-sudo -E kubectl logs -l app.kubernetes.io/name=postgres --tail=10000 || true
+if [[ "$CI_TEST_DATABASE" == "external" ]]; then
+  docker logs postgresql --tail 10000 || true
+else
+  sudo -E kubectl logs -l app.kubernetes.io/name=postgres --tail=10000 || true
+fi
+echo ::endgroup::
+
+echo ::group::STORAGE
+if [[ "$CI_TEST_STORAGE" == "azure" ]]; then
+  docker logs galaxy-azurite --tail 10000 || true
+elif [[ "$CI_TEST_STORAGE" == "s3" ]]; then
+  docker logs galaxy_minio --tail 10000 || true
+fi
 echo ::endgroup::
 
 echo ::group::EVENTS
@@ -76,3 +88,4 @@ echo "Content endpoint"
 http HEAD http://localhost:24880/galaxy/content/ || true
 echo "Status endpoint"
 http --follow --timeout 30 --check-status --pretty format --print hb http://localhost:24880/api/galaxy/pulp/api/v3/status/ || true
+http --follow --timeout 30 --check-status --pretty format --print hb http://localhost:24880/api/galaxy/ || true

@@ -100,8 +100,13 @@ spec:
         path: postgres_resource_requirements
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:advanced
-      - displayName: Postgres Extra Arguments
+      - displayName: Postgres Extra Arguments (Deprecated)
         path: postgres_extra_args
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+        - urn:alm:descriptor:com.tectonic.ui:hidden
+      - displayName: Postgres Extra Settings
+        path: postgres_extra_settings
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:advanced
         - urn:alm:descriptor:com.tectonic.ui:hidden
@@ -136,11 +141,6 @@ spec:
         - urn:alm:descriptor:com.tectonic.ui:advanced
         - urn:alm:descriptor:com.tectonic.ui:hidden
         - urn:alm:descriptor:io.kubernetes:Secret
-      - displayName: Postgres Keep Old Data PVC After Upgrade
-        path: postgres_keep_pvc_after_upgrade
-        x-descriptors:
-        - urn:alm:descriptor:com.tectonic.ui:hidden
-        - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
       - displayName: Database backup label selector
         path: postgres_label_selector
         x-descriptors:
@@ -673,11 +673,28 @@ spec:
         path: postgres_label_selector
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:hidden
+      - displayName: Skip PostgreSQL database dump
+        path: postgres_skip_data
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+        - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
       - displayName: No Log Configuration
         path: no_log
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:advanced
         - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
+      - description: Enable compression for database dumps using pg_dump built-in compression
+        displayName: Use DB Compression
+        path: use_db_compression
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+        - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
+      - description: Additional parameters for the pg_dump command
+        displayName: pg_dump Suffix
+        path: pg_dump_suffix
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+        - urn:alm:descriptor:com.tectonic.ui:text
       statusDescriptors:
       - displayName: Conditions
         path: conditions
@@ -779,6 +796,11 @@ spec:
         path: postgres_label_selector
         x-descriptors:
         - urn:alm:descriptor:com.tectonic.ui:hidden
+      - displayName: Skip PostgreSQL database restore
+        path: postgres_skip_data
+        x-descriptors:
+        - urn:alm:descriptor:com.tectonic.ui:advanced
+        - urn:alm:descriptor:com.tectonic.ui:booleanSwitch
       - displayName: Custom Resource Key
         path: custom_resource_key
         x-descriptors:
@@ -986,19 +1008,11 @@ spec:
             spec:
               containers:
               - args:
-                - --secure-listen-address=0.0.0.0:8443
-                - --upstream=http://127.0.0.1:8080/
-                - --logtostderr=true
-                - --v=10
-                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.12.0
-                name: kube-rbac-proxy
-                ports:
-                - containerPort: 8443
-                  name: https
-                resources: {}
-              - args:
-                - --metrics-addr=127.0.0.1:8080
-                - --enable-leader-election
+                - --metrics-bind-address=:8443
+                - --metrics-secure
+                - --metrics-require-rbac
+                - --health-probe-bind-address=:6789
+                - --leader-elect
                 - --leader-election-id=galaxy-operator
                 env:
                 - name: ANSIBLE_GATHERING
